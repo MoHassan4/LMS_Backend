@@ -1,0 +1,31 @@
+{
+  "name": "lms-backend",
+  "version": "1.0.0",
+  "description": "LMS Backend System",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon src/server.js",
+    "prisma:generate": "prisma generate",
+    "postinstall": "npx prisma generate && npx prisma migrate deploy"
+  },
+  "keywords": [
+    "backend",
+    "lms",
+    "learning",
+    "system"
+  ],
+  "author": "Mohamed Hassan",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "@prisma/client": "^5.22.0",
+    "nodemon": "^3.1.11",
+    "prisma": "^5.22.0"
+  }
+}

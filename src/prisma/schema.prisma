@@ -16,7 +16,8 @@ model Course {
   grade       String
   subject     String
   createdAt   DateTime @default(now())
-  sections    Section[]
+  sections    Section[] 
+  students    StudentCourse[]
 }
 
 model Section {
@@ -26,7 +27,7 @@ model Section {
   order       Int
   courseId    String
   course      Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons     Lesson[]
+  lessons     Lesson[] 
 }
 
 model Lesson {
@@ -42,5 +43,30 @@ model Lesson {
 enum LessonType {
   VIDEO
   FILE
-  QUIZ
+  EXAM
 }
+
+model Student {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  email     String?
+  parentPhone String?
+  notes     String?
+  status    String   @default("active")
+  createdAt DateTime @default(now())
+
+  courses   StudentCourse[]
+}
+
+model StudentCourse {
+  id        String  @id @default(uuid())
+  studentId String
+  courseId  String
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+}
+

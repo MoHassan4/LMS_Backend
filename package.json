@@ -6,8 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "nodemon src/server.js",
-    "prisma:generate": "prisma generate",
-    "postinstall": "npx prisma generate && npx prisma migrate deploy"
+    "prisma:generate": "prisma generate --schema=src/prisma/schema.prisma",
+    "prisma:migrate": "prisma migrate deploy --schema=src/prisma/schema.prisma",
+    "postinstall": "npm run prisma:generate && npm run prisma:migrate"
   },
   "keywords": [
     "backend",

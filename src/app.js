@@ -10,6 +10,8 @@ import errorHandler from "./common/middleware/error.middleware.js"
 
 import responseFormatter from './common/middleware/response.middleware.js'
 
+import studentRoutes from "./modules/students/student.module.js";
+
 app.use(cors());
 
 app.use(express.json());
@@ -18,6 +20,10 @@ app.use(responseFormatter);
 
 // Courses module
 app.use('/api', courseModule);
+
+// Students module
+app.use("/api/students", studentRoutes);
+
 
 app.use(errorHandler);
 

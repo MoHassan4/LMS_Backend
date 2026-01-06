@@ -60,6 +60,98 @@ export const updateSection = async (sectionId, data) =>
     prisma.section.update({ where: { id: sectionId }, data });
 
 export const updateCourse = async (id, data) => {
+  // آخر order للقسم
+  const lastSection = await prisma.section.findFirst({
+    where: { courseId: id },
+    orderBy: { order: 'desc' }
+  });
+  let nextSectionOrder = lastSection ? lastSection.order + 1 : 1;
+
+  const sectionsUpsert = [];
+  const sectionsCreate= [];
+
+  for (const section of (data.sections || [])) {
+    if (section.id) {
+      // قسم موجود → upsert
+      const lessonsUpsert = [];
+      const lessonsCreate = [];
+
+      for (const lesson of (section.lessons || [])) {
+        if (lesson.id) {
+          // درس موجود → upsert
+          lessonsUpsert.push({
+            where: { id: lesson.id },
+            update: {
+              title: lesson.title,
+              type: lesson.type,
+              meta: lesson.meta,
+              order: lesson.order
+            },
+            create: {
+              title: lesson.title,
+              type: lesson.type,
+              meta: lesson.meta,
+              order: lesson.order
+            }
+          });
+        } else {
+          // درس جديد → نحسب order بعد آخر درس موجود في القسم
+          const lastLesson = await prisma.lesson.findFirst({
+            where: { sectionId: section.id },
+            orderBy: { order: 'desc' }
+          });
+          const nextLessonOrder = lastLesson ? lastLesson.order + 1 : 1;
+
+          lessonsCreate.push({
+            title: lesson.title,
+            type: lesson.type,
+            meta: lesson.meta,
+            order: nextLessonOrder
+          });
+        }
+      }
+
+      sectionsUpsert.push({
+        where: { id: section.id },
+        update: {
+          title: section.title,
+          description: section.description,
+          order: section.order || nextSectionOrder,
+          lessons: {
+            upsert: lessonsUpsert,
+            create: lessonsCreate
+          }
+        },
+        create: {
+          title: section.title,
+          description: section.description,
+          order: section.order || nextSectionOrder,
+          lessons: { create: [...lessonsCreate, ...lessonsUpsert.map(l => l.create)] }
+        }
+      });
+
+    } else {
+      // قسم جديد → create
+      const lessonsCreate = [];
+      for (const lesson of (section.lessons || [])) {
+        lessonsCreate.push({
+          title: lesson.title,
+          type: lesson.type,
+          meta: lesson.meta,
+          order: lessonsCreate.length > 0 ? lessonsCreate[lessonsCreate.length - 1].order + 1 : 1
+        });
+      }
+
+      sectionsCreate.push({
+        title: section.title,
+        description: section.description,
+        order: nextSectionOrder,
+        lessons: { create: lessonsCreate }
+      });
+    }
+
+    nextSectionOrder++;
+  }
 
   return prisma.course.update({
     where: { id },
@@ -70,87 +162,12 @@ export const updateCourse = async (id, data) => {
       price: data.price,
       grade: data.grade,
       subject: data.subject,
-      
       sections: {
-        upsert: await Promise.all(data.sections?.map(async (section) => {
-          let sectionOrder = section.order;
-
-          // لو مفيش order محدد، نجيب آخر order موجود في الدورة
-          if (!sectionOrder) {
-            const lastSection = await prisma.section.findFirst({
-              where: { courseId: id },
-              orderBy: { order: "desc" }
-            });
-            sectionOrder = lastSection ? lastSection.order + 1 : 1;
-          }
-
-          return {
-            where: { id: section.id || "new-" + Math.random() },
-            create: {
-              title: section.title,
-              description: section.description,
-              order: sectionOrder,
-              lessons: {
-                create: await Promise.all(section.lessons?.map(async (lesson) => {
-                  let lessonOrder = lesson.order;
-
-                  if (!lessonOrder) {
-                    // لو مفيش order محدد للدرس، نجيب آخر order موجود في هذا القسم
-                    const lastLesson = await prisma.lesson.findFirst({
-                      where: { sectionId: section.id || undefined },
-                      orderBy: { order: "desc" }
-                    });
-                    lessonOrder = lastLesson ? lastLesson.order + 1 : 1;
-                  }
-
-                  return {
-                    title: lesson.title,
-                    type: lesson.type,
-                    meta: lesson.meta,
-                    order: lessonOrder
-                  };
-                })) || []
-              }
-            },
-            update: {
-              title: section.title,
-              description: section.description,
-              order: sectionOrder,
-              lessons: {
-                upsert: await Promise.all(section.lessons?.map(async (lesson) => {
-                  let lessonOrder = lesson.order;
-
-                  if (!lessonOrder) {
-                    const lastLesson = await prisma.lesson.findFirst({
-                      where: { sectionId: section.id },
-                      orderBy: { order: "desc" }
-                    });
-                    lessonOrder = lastLesson ? lastLesson.order + 1 : 1;
-                  }
-
-                  return {
-                    where: { id: lesson.id || "new-" + Math.random() },
-                    create: {
-                      title: lesson.title,
-                      type: lesson.type,
-                      meta: lesson.meta,
-                      order: lessonOrder
-                    },
-                    update: {
-                      title: lesson.title,
-                      type: lesson.type,
-                      meta: lesson.meta,
-                      order: lessonOrder
-                    }
-                  };
-                })) || []
-              }
-            }
-          };
-        })) || []
+        create: sectionsCreate,
+        upsert: sectionsUpsert
       }
     },
-        include: {
+    include: {
       sections: {
         orderBy: { order: 'asc' },
         include: {

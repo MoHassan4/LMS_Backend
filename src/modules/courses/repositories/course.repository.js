@@ -70,7 +70,7 @@ export const updateCourse = async (id, data) => {
       price: data.price,
       grade: data.grade,
       subject: data.subject,
-
+      
       sections: {
         upsert: await Promise.all(data.sections?.map(async (section) => {
           let sectionOrder = section.order;
@@ -148,6 +148,14 @@ export const updateCourse = async (id, data) => {
             }
           };
         })) || []
+      }
+    },
+        include: {
+      sections: {
+        orderBy: { order: 'asc' },
+        include: {
+          lessons: { orderBy: { order: 'asc' } }
+        }
       }
     }
   });

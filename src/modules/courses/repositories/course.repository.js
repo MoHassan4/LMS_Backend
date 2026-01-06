@@ -60,7 +60,7 @@ export const updateSection = async (sectionId, data) =>
     prisma.section.update({ where: { id: sectionId }, data });
 
 export const updateCourse = async (id, data) => {
-  // آخر order للقسم
+  // نجيب آخر order للقسم في الدورة
   const lastSection = await prisma.section.findFirst({
     where: { courseId: id },
     orderBy: { order: 'desc' }
@@ -68,60 +68,66 @@ export const updateCourse = async (id, data) => {
   let nextSectionOrder = lastSection ? lastSection.order + 1 : 1;
 
   const sectionsUpsert = [];
-  const sectionsCreate= [];
+  const sectionsCreate = [];
 
   for (const section of (data.sections || [])) {
     if (section.id) {
-      // قسم موجود → upsert
+      // Section موجود → upsert
       const lessonsUpsert = [];
       const lessonsCreate = [];
 
+      // نجيب آخر order للدرس في القسم لو هناك دروس جديدة
+      const lastLessonInSection = await prisma.lesson.findFirst({
+        where: { sectionId: section.id },
+        orderBy: { order: 'desc' }
+      });
+      let nextLessonOrder = lastLessonInSection ? lastLessonInSection.order + 1 : 1;
+
       for (const lesson of (section.lessons || [])) {
         if (lesson.id) {
-          // درس موجود → upsert
+          // Lesson موجود → سيب order كما هو إذا مش موجود في JSON
+          const lessonUpdate = {
+            title: lesson.title,
+            type: lesson.type,
+            meta: lesson.meta
+          };
+          if (lesson.order !== undefined) lessonUpdate.order = lesson.order;
+
           lessonsUpsert.push({
             where: { id: lesson.id },
-            update: {
-              title: lesson.title,
-              type: lesson.type,
-              meta: lesson.meta,
-              order: lesson.order
-            },
+            update: lessonUpdate,
             create: {
               title: lesson.title,
               type: lesson.type,
               meta: lesson.meta,
-              order: lesson.order
+              order: lesson.order || nextLessonOrder
             }
           });
         } else {
-          // درس جديد → نحسب order بعد آخر درس موجود في القسم
-          const lastLesson = await prisma.lesson.findFirst({
-            where: { sectionId: section.id },
-            orderBy: { order: 'desc' }
-          });
-          const nextLessonOrder = lastLesson ? lastLesson.order + 1 : 1;
-
+          // Lesson جديد → order = آخر درس موجود +1
           lessonsCreate.push({
             title: lesson.title,
             type: lesson.type,
             meta: lesson.meta,
             order: nextLessonOrder
           });
+          nextLessonOrder++;
         }
       }
 
+      const sectionUpdate = {
+        title: section.title,
+        description: section.description,
+        lessons: {
+          upsert: lessonsUpsert,
+          create: lessonsCreate
+        }
+      };
+      if (section.order !== undefined) sectionUpdate.order = section.order;
+
       sectionsUpsert.push({
         where: { id: section.id },
-        update: {
-          title: section.title,
-          description: section.description,
-          order: section.order || nextSectionOrder,
-          lessons: {
-            upsert: lessonsUpsert,
-            create: lessonsCreate
-          }
-        },
+        update: sectionUpdate,
         create: {
           title: section.title,
           description: section.description,
@@ -131,15 +137,18 @@ export const updateCourse = async (id, data) => {
       });
 
     } else {
-      // قسم جديد → create
+      // Section جديد → create
+      let nextLessonOrder = 1;
       const lessonsCreate = [];
+
       for (const lesson of (section.lessons || [])) {
         lessonsCreate.push({
           title: lesson.title,
           type: lesson.type,
           meta: lesson.meta,
-          order: lessonsCreate.length > 0 ? lessonsCreate[lessonsCreate.length - 1].order + 1 : 1
+          order: nextLessonOrder
         });
+        nextLessonOrder++;
       }
 
       sectionsCreate.push({
@@ -177,6 +186,7 @@ export const updateCourse = async (id, data) => {
     }
   });
 };
+
 
 // Get آخر order للـ Course
 export const getLastSectionOrder = (courseId) =>

@@ -60,7 +60,58 @@ export const updateSection = async (sectionId, data) =>
     prisma.section.update({ where: { id: sectionId }, data });
 
 export const updateCourse = async (id, data) =>
-  prisma.course.update({ where: { id }, data });
+    prisma.course.update({
+    where: { id },
+    data: {
+      title: data.title,
+      description: data.description,
+      banner: data.banner,
+      price: data.price,
+      grade: data.grade,
+      subject: data.subject,
+
+      sections: {
+        upsert: data.sections?.map(section => ({
+          where: { id: section.id || "new-" + Math.random() }, 
+          create: {
+            title: section.title,
+            description: section.description,
+            order: section.order || 1,
+            lessons: {
+              create: section.lessons?.map(lesson => ({
+                title: lesson.title,
+                type: lesson.type,
+                meta: lesson.meta,
+                order: lesson.order || 1
+              })) || []
+            }
+          },
+          update: {
+            title: section.title,
+            description: section.description,
+            order: section.order || 1,
+            lessons: {
+              upsert: section.lessons?.map(lesson => ({
+                where: { id: lesson.id || "new-" + Math.random() },
+                create: {
+                  title: lesson.title,
+                  type: lesson.type,
+                  meta: lesson.meta,
+                  order: lesson.order || 1
+                },
+                update: {
+                  title: lesson.title,
+                  type: lesson.type,
+                  meta: lesson.meta,
+                  order: lesson.order || 1
+                }
+              })) || []
+            }
+          }
+        })) || []
+      }
+    }
+  });
 
 // Get آخر order للـ Course
 export const getLastSectionOrder = (courseId) =>

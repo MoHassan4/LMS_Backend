@@ -59,8 +59,9 @@ export const getCourseById = async (id) =>
 export const updateSection = async (sectionId, data) =>
     prisma.section.update({ where: { id: sectionId }, data });
 
-export const updateCourse = async (id, data) =>
-    prisma.course.update({
+export const updateCourse = async (id, data) => {
+
+  return prisma.course.update({
     where: { id },
     data: {
       title: data.title,
@@ -71,47 +72,86 @@ export const updateCourse = async (id, data) =>
       subject: data.subject,
 
       sections: {
-        upsert: data.sections?.map(section => ({
-          where: { id: section.id || "new-" + Math.random() }, 
-          create: {
-            title: section.title,
-            description: section.description,
-            order: section.order || 1,
-            lessons: {
-              create: section.lessons?.map(lesson => ({
-                title: lesson.title,
-                type: lesson.type,
-                meta: lesson.meta,
-                order: lesson.order || 1
-              })) || []
-            }
-          },
-          update: {
-            title: section.title,
-            description: section.description,
-            order: section.order || 1,
-            lessons: {
-              upsert: section.lessons?.map(lesson => ({
-                where: { id: lesson.id || "new-" + Math.random() },
-                create: {
-                  title: lesson.title,
-                  type: lesson.type,
-                  meta: lesson.meta,
-                  order: lesson.order || 1
-                },
-                update: {
-                  title: lesson.title,
-                  type: lesson.type,
-                  meta: lesson.meta,
-                  order: lesson.order || 1
-                }
-              })) || []
-            }
+        upsert: await Promise.all(data.sections?.map(async (section) => {
+          let sectionOrder = section.order;
+
+          // لو مفيش order محدد، نجيب آخر order موجود في الدورة
+          if (!sectionOrder) {
+            const lastSection = await prisma.section.findFirst({
+              where: { courseId: id },
+              orderBy: { order: "desc" }
+            });
+            sectionOrder = lastSection ? lastSection.order + 1 : 1;
           }
+
+          return {
+            where: { id: section.id || "new-" + Math.random() },
+            create: {
+              title: section.title,
+              description: section.description,
+              order: sectionOrder,
+              lessons: {
+                create: await Promise.all(section.lessons?.map(async (lesson) => {
+                  let lessonOrder = lesson.order;
+
+                  if (!lessonOrder) {
+                    // لو مفيش order محدد للدرس، نجيب آخر order موجود في هذا القسم
+                    const lastLesson = await prisma.lesson.findFirst({
+                      where: { sectionId: section.id || undefined },
+                      orderBy: { order: "desc" }
+                    });
+                    lessonOrder = lastLesson ? lastLesson.order + 1 : 1;
+                  }
+
+                  return {
+                    title: lesson.title,
+                    type: lesson.type,
+                    meta: lesson.meta,
+                    order: lessonOrder
+                  };
+                })) || []
+              }
+            },
+            update: {
+              title: section.title,
+              description: section.description,
+              order: sectionOrder,
+              lessons: {
+                upsert: await Promise.all(section.lessons?.map(async (lesson) => {
+                  let lessonOrder = lesson.order;
+
+                  if (!lessonOrder) {
+                    const lastLesson = await prisma.lesson.findFirst({
+                      where: { sectionId: section.id },
+                      orderBy: { order: "desc" }
+                    });
+                    lessonOrder = lastLesson ? lastLesson.order + 1 : 1;
+                  }
+
+                  return {
+                    where: { id: lesson.id || "new-" + Math.random() },
+                    create: {
+                      title: lesson.title,
+                      type: lesson.type,
+                      meta: lesson.meta,
+                      order: lessonOrder
+                    },
+                    update: {
+                      title: lesson.title,
+                      type: lesson.type,
+                      meta: lesson.meta,
+                      order: lessonOrder
+                    }
+                  };
+                })) || []
+              }
+            }
+          };
         })) || []
       }
     }
   });
+};
 
 // Get آخر order للـ Course
 export const getLastSectionOrder = (courseId) =>

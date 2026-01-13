@@ -18,6 +18,7 @@ model Course {
   createdAt   DateTime @default(now())
   sections    Section[] 
   students    StudentCourse[]
+  assignments  Assignment[]
 }
 
 model Section {
@@ -27,7 +28,9 @@ model Section {
   order       Int
   courseId    String
   course      Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  lessons     Lesson[] 
+  lessons     Lesson[]
+  assignments  Assignment[] 
+  createdAt DateTime @default(now())
 }
 
 model Lesson {
@@ -38,12 +41,13 @@ model Lesson {
   meta   Json?
   sectionId String
   section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
 
 enum LessonType {
   VIDEO
   FILE
-  EXAM
+  ASSIGNMENT
 }
 
 model Student {
@@ -53,10 +57,17 @@ model Student {
   email     String?
   parentPhone String?
   notes     String?
-  status    String   @default("active")
+  status    StudentStatus @default(ACTIVE)
   createdAt DateTime @default(now())
 
   courses   StudentCourse[]
+  studentAssignments StudentAssignment[]
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
 }
 
 model StudentCourse {
@@ -68,5 +79,78 @@ model StudentCourse {
   course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+
+  createdAt DateTime @default(now())
+}
+
+model Assignment {
+  id          String   @id @default(uuid())
+  title       String
+  duration    Int
+  passDegree  Int
+  totalDegree Int
+  questionsCount Int
+
+  courseId    String
+  sectionId   String
+
+  createdAt   DateTime @default(now())
+
+  course   Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  section  Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  questions Question[]
+
+   studentAssignments StudentAssignment[]
+
+  status AssignmentStatus @default(DRAFT)
+
+}
+
+enum AssignmentStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+model Question {
+  id           String   @id @default(uuid())
+  type         QuestionType
+  header       Json     // { text?: string, image?: string }
+  degree       Int
+
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  options Option[]
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+}
+
+
+model Option {
+  id         String  @id @default(uuid())
+  text       String
+  isCorrect  Boolean
+
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+}
+
+model StudentAssignment {
+  id           String   @id @default(uuid())
+  studentId    String
+  assignmentId String
+  score        Int
+  passed       Boolean
+  submittedAt  DateTime @default(now())
+
+  student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, assignmentId])
 }
 

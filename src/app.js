@@ -14,6 +14,8 @@ import studentRoutes from "./modules/students/student.module.js";
 
 import assignmentsRoutes from './modules/Assignments/assignment.module.js'
 
+import dashboardRoutes from './modules/Dashboard/dashboard.module.js';
+
 app.use(cors());
 
 app.use(express.json());
@@ -28,6 +30,9 @@ app.use("/api/students", studentRoutes);
 
 // Assinment Module
 app.use("/api/assignments", assignmentsRoutes)
+
+// Dashboard Module
+app.use("/api/dashboard" , dashboardRoutes);
 
 app.use(errorHandler);
 

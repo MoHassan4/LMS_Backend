@@ -12,9 +12,17 @@ import responseFormatter from './common/middleware/response.middleware.js'
 
 import studentRoutes from "./modules/students/student.module.js";
 
-import assignmentsRoutes from './modules/Assignments/assignment.module.js'
+import assignmentsRoutes from './modules/Assignments/assignment.module.js';
 
 import dashboardRoutes from './modules/Dashboard/dashboard.module.js';
+
+import submissionRoutes from './modules/Submissions/submission.module.js';
+
+import subscriptionRoutes from './modules/Subscriptions/subscription.module.js'
+
+import discountRoutes from './modules/Discount/discount.module.js'
+
+import couponRoutes from './modules/Coupon/coupon.module.js'
 
 app.use(cors());
 
@@ -29,10 +37,23 @@ app.use('/api', courseModule);
 app.use("/api/students", studentRoutes);
 
 // Assinment Module
-app.use("/api/assignments", assignmentsRoutes)
+app.use("/api/assignments", assignmentsRoutes);
 
 // Dashboard Module
 app.use("/api/dashboard" , dashboardRoutes);
+
+// Submission Module
+app.use("/api/submissions" , submissionRoutes)
+
+// Subscription Module
+app.use("/api/subscriptions" , subscriptionRoutes);
+
+// Discount Module
+app.use("/api/discounts" , discountRoutes);
+
+// Coupoun Module
+app.use("/api/coupons" , couponRoutes);
+
 
 app.use(errorHandler);
 

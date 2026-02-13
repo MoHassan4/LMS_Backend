@@ -1,7 +1,7 @@
 import * as repo from "../repositories/subscription.repoistory.js";
 import prisma from "../../../config/prisma.js";
 import { applyDiscount } from "../../Discount/services/discount.service.js";
-import { applyCoupon } from "../../coupon/services/coupon.service.js";
+import { applyCoupon } from "../../Coupon/services/coupon.service.js";
 import AppError from "../../../common/utils/AppError.js";
 
 export const createSubscription = async ({
@@ -239,3 +239,4 @@ export const updateSubscription = async (
 
 
 export const cancelSubscription = (id) => repo.updateStatus(id, "CANCELED");
+

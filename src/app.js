@@ -16,6 +16,8 @@ import assignmentsRoutes from './modules/Assignments/assignment.module.js';
 
 import dashboardRoutes from './modules/Dashboard/dashboard.module.js';
 
+import submissionRoutes from './modules/Submissions/submission.module.js';
+
 import subscriptionRoutes from './modules/Subscriptions/subscription.module.js'
 
 import discountRoutes from './modules/Discount/discount.module.js'
@@ -39,6 +41,9 @@ app.use("/api/assignments", assignmentsRoutes);
 
 // Dashboard Module
 app.use("/api/dashboard" , dashboardRoutes);
+
+// Submission Module
+app.use("/api/submissions" , submissionRoutes)
 
 // Subscription Module
 app.use("/api/subscriptions" , subscriptionRoutes);

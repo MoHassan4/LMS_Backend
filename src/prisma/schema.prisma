@@ -19,6 +19,8 @@ model Course {
   sections    Section[] 
   students    StudentCourse[]
   assignments  Assignment[]
+
+  subscriptions Subscription[]
 }
 
 model Section {
@@ -54,14 +56,17 @@ model Student {
   id        String   @id @default(uuid())
   name      String
   phone     String
-  email     String?
+  email     String
   parentPhone String?
+  grade     String
   notes     String?
   status    StudentStatus @default(ACTIVE)
   createdAt DateTime @default(now())
 
   courses   StudentCourse[]
   studentAssignments StudentAssignment[]
+  subscriptions Subscription[]
+  couponUsages  CouponUsage[]
 }
 
 enum StudentStatus {
@@ -147,10 +152,117 @@ model StudentAssignment {
   score        Int
   passed       Boolean
   submittedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   student   Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
   assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, assignmentId])
+}
+
+model Subscription {
+  id               String   @id @default(uuid())
+
+  studentId        String
+  courseId         String
+
+  priceBeforeDiscount Float
+  discountAmount     Float   @default(0)
+  finalPrice         Float
+
+  paymentMethod     PaymentMethod
+
+  status            SubscriptionStatus @default(ACTIVE)
+
+  startedAt         DateTime @default(now())
+  endsAt            DateTime?
+
+  createdAt         DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  couponUsage CouponUsage?
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  VODAFONE_CASH
+  FAWRY
+  BANK_TRANSFER
+}
+
+model Discount {
+  id            String   @id @default(uuid())
+  name          String?
+
+  type          DiscountType
+  value         Float
+
+  appliesTo     DiscountAppliesTo
+  courseIds     String[]   // لو appliesTo = COURSES
+
+  maxStudents   Int?
+  usedCount     Int        @default(0)
+
+  startDate     DateTime
+  endDate       DateTime
+
+  isActive      Boolean    @default(true)
+
+  createdAt     DateTime   @default(now())
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum DiscountAppliesTo {
+  ALL
+  COURSES
+}
+
+model Coupon {
+  id                 String   @id @default(uuid())
+  code               String   @unique
+
+  type               DiscountType
+  value              Float
+
+  maxUsage           Int?
+  maxUsagePerStudent Int? @default(1)
+
+  usedCount          Int      @default(0)
+
+  expiresAt          DateTime
+  isActive           Boolean  @default(true)
+
+  createdAt          DateTime @default(now())
+
+  usages CouponUsage[]
+}
+
+model CouponUsage {
+  id             String   @id @default(uuid())
+
+  couponId       String
+  studentId      String
+  subscriptionId String   @unique
+
+  usedAt         DateTime @default(now())
+
+  coupon       Coupon       @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([couponId, studentId, subscriptionId])
 }
 

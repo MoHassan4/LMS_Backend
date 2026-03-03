@@ -9,7 +9,8 @@ export const createSubscription = async ({
   courseId,
   paymentMethod,
   couponCode,
-  endsAt
+  endsAt,
+  status
 }) => {
   return prisma.$transaction(async (tx) => {
     // 1️⃣ validate course
@@ -80,7 +81,8 @@ export const createSubscription = async ({
         priceBeforeDiscount,
         discountAmount: discountAmount + couponAmount,
         finalPrice,
-        endsAt
+        endsAt,
+        status
       },
     });
 

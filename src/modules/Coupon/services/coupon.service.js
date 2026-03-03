@@ -39,13 +39,13 @@ export const deleteCoupon = async (id) => {
 };
 
 
-export const applyCoupon = async ({
-  code,
-  studentId,
-  subscriptionId,
-  price,
-}) => {
-  const coupon = await repo.findByCode(code);
+export const applyCoupon = async (
+  { code, studentId, price },
+  tx
+) => {
+  const coupon = await tx.coupon.findUnique({
+    where: { code },
+  });
 
   if (!coupon || !coupon.isActive)
     throw new AppError("Invalid coupon", 400);
@@ -56,10 +56,12 @@ export const applyCoupon = async ({
   if (coupon.maxUsage && coupon.usedCount >= coupon.maxUsage)
     throw new AppError("Coupon usage limit reached", 400);
 
-  const studentUsage = await repo.countStudentUsage(
-    coupon.id,
-    studentId
-  );
+  const studentUsage = await tx.couponUsage.count({
+    where: {
+      couponId: coupon.id,
+      studentId,
+    },
+  });
 
   if (
     coupon.maxUsagePerStudent &&
@@ -67,25 +69,15 @@ export const applyCoupon = async ({
   )
     throw new AppError("Coupon already used", 400);
 
-  let discountAmount = 0;
+  const discountAmount =
+    coupon.type === "PERCENTAGE"
+      ? (price * coupon.value) / 100
+      : coupon.value;
 
-  if (coupon.type === "PERCENTAGE") {
-    discountAmount = (price * coupon.value) / 100;
-  } else {
-    discountAmount = coupon.value;
-  }
-
-  await repo.createUsage({
+  return {
+    amount: discountAmount,
     couponId: coupon.id,
-    studentId,
-    subscriptionId,
-  });
-
-  await repo.updateCoupon(coupon.id, {
-    usedCount: { increment: 1 },
-  });
-
-  return discountAmount;
+  };
 };
 
 export const getAllCoupons = () => repo.findAll();

@@ -2,12 +2,14 @@ import * as repo from "../repositories/discount.repository.js";
 import AppError from "../../../common/utils/AppError.js";
 import prisma from "../../../config/prisma.js";
 
-export const applyDiscount = async ({ courseId, price }) => {
-  const discount = await prisma.discount.findFirst({
+export const applyDiscount = async ({ courseId, price }, tx) => {
+  const now = new Date();
+
+  const discounts = await tx.discount.findMany({
     where: {
       isActive: true,
-      startDate: { lte: new Date() },
-      endDate: { gte: new Date() },
+      startDate: { lte: now },
+      endDate: { gte: now },
       OR: [
         { appliesTo: "ALL" },
         {
@@ -18,25 +20,33 @@ export const applyDiscount = async ({ courseId, price }) => {
     },
   });
 
-  if (!discount) return 0;
+  if (!discounts.length) return 0;
 
-  if (discount.maxStudents && discount.usedCount >= discount.maxStudents)
-    return 0;
+  let maxDiscount = 0;
+  let selectedDiscount = null;
 
-  let discountAmount = 0;
+  for (const discount of discounts) {
+    if (
+      discount.maxStudents &&
+      discount.usedCount >= discount.maxStudents
+    )
+      continue;
 
-  if (discount.type === "PERCENTAGE") {
-    discountAmount = (price * discount.value) / 100;
-  } else {
-    discountAmount = discount.value;
+    let amount =
+      discount.type === "PERCENTAGE"
+        ? (price * discount.value) / 100
+        : discount.value;
+
+    if (amount > maxDiscount) {
+      maxDiscount = amount;
+      selectedDiscount = discount;
+    }
   }
 
-  await prisma.discount.update({
-    where: { id: discount.id },
-    data: { usedCount: { increment: 1 } },
-  });
-
-  return discountAmount;
+  return {
+    amount: maxDiscount,
+    discountId: selectedDiscount?.id || null,
+  };
 };
 export const createDiscount = async (data) => {
   if (data.appliesTo === "COURSES" && !data.courseIds?.length) {

@@ -55,8 +55,8 @@ enum LessonType {
 model Student {
   id        String   @id @default(uuid())
   name      String
-  phone     String
-  email     String
+  phone     String  @unique
+  email     String @unique
   parentPhone String?
   grade     String
   notes     String?

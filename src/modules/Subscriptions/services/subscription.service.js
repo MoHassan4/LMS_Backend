@@ -1,7 +1,7 @@
 import * as repo from "../repositories/subscription.repoistory.js";
 import prisma from "../../../config/prisma.js";
 import { applyDiscount } from "../../Discount/services/discount.service.js";
-import { applyCoupon } from "../../Coupon/services/coupon.service.js";
+import { applyCoupon } from "../../coupon/services/coupon.service.js";
 import AppError from "../../../common/utils/AppError.js";
 
 export const createSubscription = async ({
@@ -33,58 +33,81 @@ export const createSubscription = async ({
 
     const priceBeforeDiscount = course.price;
 
-    // 3️⃣ apply discount
-    const discountAmount = await applyDiscount(
+    // 3️⃣ apply automatic discount
+    const discountResult = (await applyDiscount(
       {
         courseId,
         price: priceBeforeDiscount,
       },
-      tx // مهم
-    );
+      tx,
+    )) || { amount: 0, discountId: null };
+
+    const discountAmount = discountResult.amount || 0;
+    const discountId = discountResult.discountId || null;
 
     let priceAfterDiscount = priceBeforeDiscount - discountAmount;
 
     // 4️⃣ apply coupon (optional)
-    let couponDiscount = 0;
+    let couponAmount = 0;
+    let couponId = null;
+
+    console.log(couponCode)
+
     if (couponCode) {
-      couponDiscount = await applyCoupon(
+      const couponResult = (await applyCoupon(
         {
           code: couponCode,
           studentId,
           price: priceAfterDiscount,
         },
-        tx // مهم
-      );
+        tx,
+      )) || { amount: 0, couponId: null };
+
+      couponAmount = couponResult.amount || 0;
+      couponId = couponResult.couponId || null;
     }
 
+    console.log(couponAmount)
+
     // 5️⃣ final price protection
-    let finalPrice = priceAfterDiscount - couponDiscount;
+    let finalPrice = priceAfterDiscount - couponAmount;
+
     finalPrice = Math.max(finalPrice, 0);
 
-    // 6️⃣ create subscription (مرة واحدة)
+    // 6️⃣ create subscription
     const subscription = await tx.subscription.create({
       data: {
         studentId,
         courseId,
         paymentMethod,
         priceBeforeDiscount,
-        discountAmount: discountAmount + couponDiscount,
+        discountAmount: discountAmount + couponAmount,
         finalPrice,
       },
     });
 
     // 7️⃣ register coupon usage
-    if (couponCode) {
+    if (couponId) {
       await tx.couponUsage.create({
         data: {
-          coupon: { connect: { code: couponCode } },
-          student: { connect: { id: studentId } },
-          subscription: { connect: { id: subscription.id } },
+          couponId,
+          studentId,
+          subscriptionId: subscription.id,
         },
       });
 
       await tx.coupon.update({
-        where: { code: couponCode },
+        where: { id: couponId },
+        data: {
+          usedCount: { increment: 1 },
+        },
+      });
+    }
+
+    // 8️⃣ register discount usage
+    if (discountId) {
+      await tx.discount.update({
+        where: { id: discountId },
         data: {
           usedCount: { increment: 1 },
         },
@@ -104,88 +127,48 @@ export const getStudentSubscriptions = (studentId) =>
 
 export const updateSubscription = async (
   id,
-  { paymentMethod, couponCode, status }
+  { paymentMethod, couponCode, status },
 ) => {
   return prisma.$transaction(async (tx) => {
+
     const subscription = await tx.subscription.findUnique({
       where: { id },
       include: { couponUsage: true },
     });
 
-    if (!subscription)
+    if (!subscription) {
       throw new AppError("Subscription not found", 404);
+    }
 
+    // =========================
+    // 1️⃣ Validate Status
+    // =========================
     let updatedStatus = subscription.status;
 
-    // -------------------------
-    // 1️⃣ Handle Status Change
-    // -------------------------
-    if (status && status !== subscription.status) {
-      if (!["ACTIVE", "CANCELED","EXPIRED"].includes(status)) {
+    if (status) {
+      if (!["ACTIVE", "CANCELED", "EXPIRED"].includes(status)) {
         throw new AppError("Invalid status value", 400);
       }
 
       updatedStatus = status;
-
-      // لو Cancel
-      if (status === "CANCELED") {
-        if (subscription.couponUsage) {
-          await tx.couponUsage.delete({
-            where: { subscriptionId: subscription.id },
-          });
-
-          await tx.coupon.update({
-            where: { id: subscription.couponUsage.couponId },
-            data: {
-              usedCount: { decrement: 1 },
-            },
-          });
-        }
-      }
     }
 
-    // -------------------------
-    // 2️⃣ Recalculate Pricing
-    // -------------------------
+    // =========================
+    // 2️⃣ Get Course Price
+    // =========================
     const course = await tx.course.findUnique({
       where: { id: subscription.courseId },
     });
 
-    const priceBeforeDiscount = course.price;
-
-    const discountAmount = await applyDiscount(
-      {
-        courseId: subscription.courseId,
-        price: priceBeforeDiscount,
-      },
-      tx
-    );
-
-    let priceAfterDiscount = priceBeforeDiscount - discountAmount;
-    let couponDiscount = 0;
-    let newCoupon = null;
-
-    if (couponCode && updatedStatus === "ACTIVE") {
-      couponDiscount = await applyCoupon(
-        {
-          code: couponCode,
-          studentId: subscription.studentId,
-          price: priceAfterDiscount,
-        },
-        tx
-      );
-
-      newCoupon = await tx.coupon.findUnique({
-        where: { code: couponCode },
-      });
+    if (!course) {
+      throw new AppError("Course not found", 404);
     }
 
-    let finalPrice = priceAfterDiscount - couponDiscount;
-    finalPrice = Math.max(finalPrice, 0);
+    const priceBeforeDiscount = course.price;
 
-    // -------------------------
-    // 3️⃣ Remove Old Coupon
-    // -------------------------
+    // =========================
+    // 3️⃣ Remove Old Coupon (if exists)
+    // =========================
     if (subscription.couponUsage) {
       await tx.couponUsage.delete({
         where: { subscriptionId: subscription.id },
@@ -199,44 +182,51 @@ export const updateSubscription = async (
       });
     }
 
-    // -------------------------
-    // 4️⃣ Create New Coupon Usage
-    // -------------------------
-    if (newCoupon) {
-      await tx.couponUsage.create({
-        data: {
-          couponId: newCoupon.id,
+    // =========================
+    // 4️⃣ Apply Discount
+    // =========================
+    const discountAmount = await applyDiscount(
+      {
+        courseId: subscription.courseId,
+        price: priceBeforeDiscount,
+      },
+      tx
+    );
+
+    let priceAfterDiscount = priceBeforeDiscount - discountAmount;
+
+    // =========================
+    // 5️⃣ Apply Coupon (optional)
+    // =========================
+    let couponDiscount = 0;
+
+    if (couponCode && updatedStatus === "ACTIVE") {
+      couponDiscount = await applyCoupon(
+        {
+          code: couponCode,
           studentId: subscription.studentId,
           subscriptionId: subscription.id,
+          price: priceAfterDiscount,
         },
-      });
-
-      await tx.coupon.update({
-        where: { id: newCoupon.id },
-        data: {
-          usedCount: { increment: 1 },
-        },
-      });
+        tx
+      );
     }
 
-    // -------------------------
-    // 5️⃣ Update Subscription
-    // -------------------------
+    let finalPrice = priceAfterDiscount - couponDiscount;
+    finalPrice = Math.max(finalPrice, 0);
+
+    // =========================
+    // 6️⃣ Update Subscription
+    // =========================
     return tx.subscription.update({
       where: { id },
       data: {
-        paymentMethod: paymentMethod || subscription.paymentMethod,
+        paymentMethod: paymentMethod ?? subscription.paymentMethod,
         status: updatedStatus,
         endsAt: updatedStatus === "CANCELED" ? new Date() : null,
-        priceBeforeDiscount,
-        discountAmount: discountAmount + couponDiscount,
-        finalPrice,
       },
     });
   });
 };
 
-
-
 export const cancelSubscription = (id) => repo.updateStatus(id, "CANCELED");
-

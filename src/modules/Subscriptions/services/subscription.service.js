@@ -9,6 +9,7 @@ export const createSubscription = async ({
   courseId,
   paymentMethod,
   couponCode,
+  endsAt
 }) => {
   return prisma.$transaction(async (tx) => {
     // 1️⃣ validate course
@@ -65,8 +66,6 @@ export const createSubscription = async ({
       couponId = couponResult.couponId || null;
     }
 
-    console.log(couponAmount)
-
     // 5️⃣ final price protection
     let finalPrice = priceAfterDiscount - couponAmount;
 
@@ -81,6 +80,7 @@ export const createSubscription = async ({
         priceBeforeDiscount,
         discountAmount: discountAmount + couponAmount,
         finalPrice,
+        endsAt
       },
     });
 
@@ -125,7 +125,7 @@ export const getStudentSubscriptions = (studentId) =>
 
 export const updateSubscription = async (
   id,
-  { paymentMethod, couponCode, status },
+  { paymentMethod, couponCode, status ,endsAt },
 ) => {
   return prisma.$transaction(async (tx) => {
 
@@ -221,11 +221,10 @@ export const updateSubscription = async (
       data: {
         paymentMethod: paymentMethod ?? subscription.paymentMethod,
         status: updatedStatus,
-        endsAt: updatedStatus === "CANCELED" ? new Date() : null,
+        endsAt: updatedStatus === "CANCELED" ? new Date() : subscription.endsAt,
       },
     });
   });
 };
 
 export const cancelSubscription = (id) => repo.updateStatus(id, "CANCELED");
-

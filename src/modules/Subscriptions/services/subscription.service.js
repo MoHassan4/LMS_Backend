@@ -51,8 +51,6 @@ export const createSubscription = async ({
     let couponAmount = 0;
     let couponId = null;
 
-    console.log(couponCode)
-
     if (couponCode) {
       const couponResult = (await applyCoupon(
         {
@@ -230,3 +228,4 @@ export const updateSubscription = async (
 };
 
 export const cancelSubscription = (id) => repo.updateStatus(id, "CANCELED");
+
